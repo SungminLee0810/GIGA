@@ -6,18 +6,45 @@ import uuid
 import numpy as np
 import pandas as pd
 import tqdm
+import cv2
 
 from vgn import io#, vis
 from vgn.grasp import *
 from vgn.simulation import ClutterRemovalSim
 from vgn.utils.transform import Rotation, Transform
 from vgn.utils.implicit import get_mesh_pose_list_from_world, get_scene_from_mesh_pose_list
+from vgn.utils.nvisii_render import NViSIIRenderer
+
 
 MAX_CONSECUTIVE_FAILURES = 2
 
 
 State = collections.namedtuple("State", ["tsdf", "pc"])
 
+
+opt = {
+    'spp': 100,
+    'height': 480, #480
+    'width': 480, #480
+    'camera': {
+        'position': [0.15, -0.3, 0.5],
+        'look_at': [0.15, 0.2, 0.1]
+    },
+    'light': {
+        'intensity': 80,
+        'scale': [1, 1, 1],
+        'position': [0, -2, 3],
+        'look_at': [0.15, 0.15, 0.1]
+    },
+    'floor': {
+        'texture':
+        '/home/ubuntu/simonlee0810/Codes/robosuite/robosuite/models/assets/textures/light-wood.png',
+        'scale': [2, 2, 2],
+        'position': [0.15, 0.15, 0.05],
+    },
+}
+
+NViSIIRenderer.init()
 
 def run(
     grasp_plan_fn,
@@ -34,9 +61,10 @@ def run(
     result_path=None,
     add_noise=False,
     sideview=False,
-    resolution=40,
+    resolution=80, # 40 80
     silence=False,
-    visualize=False
+    visualize=False,
+    multi_modal=False
 ):
     """Run several rounds of simulated clutter removal experiments.
 
@@ -47,6 +75,7 @@ def run(
     #sideview=False
     #n = 6
     sim = ClutterRemovalSim(scene, object_set, gui=sim_gui, seed=seed, add_noise=add_noise, sideview=sideview)
+    renderer = NViSIIRenderer(opt)
     logger = Logger(logdir, description)
     cnt = 0
     success = 0
@@ -72,9 +101,9 @@ def run(
             timings = {}
 
             # scan the scene
-            tsdf, pc, timings["integration"] = sim.acquire_tsdf(n=n, N=N, resolution=40)
+            tsdf, pc, timings["integration"] = sim.acquire_tsdf(n=n, N=N, resolution=80) # 40 80
             state = argparse.Namespace(tsdf=tsdf, pc=pc)
-            if resolution != 40:
+            if resolution != 80: # 40 80
                 extra_tsdf, _, _ = sim.acquire_tsdf(n=n, N=N, resolution=resolution)
                 state.tsdf_process = extra_tsdf
 
@@ -85,6 +114,19 @@ def run(
             if visualize:
                 mesh_pose_list = get_mesh_pose_list_from_world(sim.world, object_set)
                 scene_mesh = get_scene_from_mesh_pose_list(mesh_pose_list)
+                if multi_modal is True:
+                    renderer.reset()
+                    renderer.place_objects_from_list(mesh_pose_list, None)
+                    # img = renderer.render()
+                    # img = np.array(img).reshape(opt['height'],opt['width'],4)
+                    # import cv2, imutils
+                    # rotated = imutils.rotate((cv2.flip(img[:,:,:3] * 255, 1)).astype(np.float32), 180)
+                    # cv2.imwrite('test.png', cv2.cvtColor(rotated, cv2.COLOR_BGR2RGB))
+                    renderer.render('tmp.png')
+                    img = cv2.imread("tmp.png")
+                    img = np.transpose(img, (2, 0, 1)).astype(np.float32) / 255
+                    state.img = img
+
                 grasps, scores, timings["planning"], visual_mesh = grasp_plan_fn(state, scene_mesh)
                 logger.log_mesh(scene_mesh, visual_mesh, f'round_{round_id:03d}_trial_{trial_id:03d}')
             else:
