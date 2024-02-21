@@ -1,4 +1,6 @@
+import os
 import numpy as np
+import cv2
 from scipy import ndimage
 import torch.utils.data
 from pathlib import Path
@@ -15,7 +17,7 @@ class DatasetVoxel(torch.utils.data.Dataset):
         self.num_point = num_point
         self.raw_root = raw_root
         self.num_th = 32
-        self.df = read_df(raw_root)
+        self.df = read_df(raw_root, if_origin=True)
         self.size, _, _, _ = read_setup(raw_root)
 
     def __len__(self):
@@ -60,7 +62,7 @@ class DatasetVoxelOccFile(torch.utils.data.Dataset):
         self.num_point_occ = num_point_occ
         self.raw_root = raw_root
         self.num_th = 32
-        self.df = read_df(raw_root)
+        self.df = read_df(raw_root, if_origin=True)
         self.size, _, _, _ = read_setup(raw_root)
 
     def __len__(self):
@@ -73,7 +75,8 @@ class DatasetVoxelOccFile(torch.utils.data.Dataset):
         width = self.df.loc[i, "width"].astype(np.single)
         label = self.df.loc[i, "label"].astype(np.long)
         voxel_grid = read_voxel_grid(self.root, scene_id)
-        
+        img = cv2.imread(os.path.join(self.root, 'rendering', scene_id + ".png"))
+        img = np.transpose(img, (2, 0, 1)).astype(np.float32) / 255
         if self.augment:
             voxel_grid, ori, pos = apply_transform(voxel_grid, ori, pos)
         
@@ -90,7 +93,7 @@ class DatasetVoxelOccFile(torch.utils.data.Dataset):
         occ_points, occ = self.read_occ(scene_id, self.num_point_occ)
         occ_points = occ_points / self.size - 0.5
 
-        return x, y, pos, occ_points, occ
+        return x, y, pos, occ_points, occ, img
 
     def read_occ(self, scene_id, num_point):
         occ_paths = list((self.raw_root / 'occ' / scene_id).glob('*.npz'))

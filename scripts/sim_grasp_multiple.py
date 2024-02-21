@@ -11,7 +11,8 @@ from vgn.utils.misc import set_random_seed
 
 def main(args):
 
-    if args.type in ['giga', 'giga_aff']:
+    if args.type in ['giga', 'giga_aff', 'giga_3d', 'giga_multi']:
+        multi_modal = True if args.type == 'giga_multi' else False
         grasp_planner = VGNImplicit(args.model,
                                     args.type,
                                     best=args.best,
@@ -19,8 +20,10 @@ def main(args):
                                     force_detection=args.force,
                                     out_th=0.1,
                                     select_top=False,
-                                    visualize=args.vis)
+                                    visualize=args.vis,
+                                    multi_modal=multi_modal)
     elif args.type == 'vgn':
+        multi_modal = False
         grasp_planner = VGN(args.model,
                             args.type,
                             best=args.best,
@@ -50,7 +53,8 @@ def main(args):
             add_noise=args.add_noise,
             sideview=args.sideview,
             silence=args.silence,
-            visualize=args.vis)
+            visualize=args.vis,
+            multi_modal=multi_modal)
         gsr.append(success_rate)
         dr.append(declutter_rate)
     results = {
